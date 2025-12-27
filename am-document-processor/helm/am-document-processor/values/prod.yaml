@@ -1,0 +1,102 @@
+# Production Environment Configuration
+environment: prod
+
+# Application Configuration
+config:
+  documentProcessing:
+    maxRetries: ${DOC_MAX_RETRIES}
+    retryDelayMs: ${DOC_RETRY_DELAY_MS}
+    threadPoolSize: ${DOC_THREAD_POOL_SIZE}
+    threadQueueCapacity: ${DOC_THREAD_QUEUE_CAPACITY}
+    storageProvider: "s3"
+
+# Pod Configuration
+replicaCount: 3
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"
+  fluentbit.io/parser: "java"
+
+# Pod Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+
+# Container Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# Service Configuration
+service:
+  type: ClusterIP
+  port: 8080
+
+# Resource Configuration
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 1000m
+    memory: 1Gi
+
+# Infrastructure Configuration
+postgresql:
+  enabled: true
+  fullname: am-doc-postgresql
+  auth:
+    database: document_processor_db
+    username: ${POSTGRES_USERNAME}
+    password: ${POSTGRES_PASSWORD}
+  primary:
+    service:
+      port: 5432
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+
+kafka:
+  enabled: true
+  bootstrapServers: am-prod-kafka:9092
+  config:
+    consumerGroupId: am-document-processor-prod
+    autoOffsetReset: earliest
+    topics:
+      documentUpload: am-document-upload-prod
+      documentProcessed: am-document-processed-prod
+    replicationFactor: 3
+    numPartitions: 6
+
+# Autoscaling Configuration
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: docproc.aminvestment.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: docproc-tls
+      hosts:
+        - docproc.aminvestment.com

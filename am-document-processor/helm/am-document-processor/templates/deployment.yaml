@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "am-document-processor.fullname" . }}
+  labels:
+    {{- include "am-document-processor.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "am-document-processor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Prometheus annotations for metrics collection
+        prometheus.io/scrape: "{{ .Values.monitoring.prometheus.scrape }}"
+        prometheus.io/path: "{{ .Values.monitoring.prometheus.path }}"
+        prometheus.io/port: "{{ .Values.monitoring.prometheus.port }}"
+        # Add checksum annotations for config changes
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        # Vault Agent Injector annotations
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/auth-config-audience: "vault"  # Adding audience as per warning in logs
+        vault.hashicorp.com/auth-config-issuer: "https://kubernetes.default.svc.cluster.local"
+        vault.hashicorp.com/auth-config-disable-iss-validation: "true"
+        vault.hashicorp.com/auth-config-disable-local-ca-jwt: "true"
+        vault.hashicorp.com/role: "dev-role"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-inject-secret-kafka: "kv/preprod/kafka"
+        vault.hashicorp.com/agent-inject-template-kafka: |
+          {{`{{- with secret "kv/preprod/kafka" -}}
+          KAFKA_BOOTSTRAP_SERVERS="{{ .Data.data.kafkabootstrapserver }}"
+          KAFKA_SECURITY_PROTOCOL="{{ .Data.data.securityprotocol }}"
+          KAFKA_SASL_MECHANISM="{{ .Data.data.sslmechanism }}"
+          KAFKA_SASL_JAAS_CONFIG="{{ .Data.data.sasljaasconfig }}"
+          KAFKA_ZOOKEEPER_CONNECT="{{ .Data.data.zookeeperconnect }}"
+          KAFKA_CONSUMER_GROUP_ID="{{ .Data.data.consumerGroupId }}"
+          KAFKA_CONSUMER_AUTO_OFFSET_RESET="{{ .Data.data.autooffsetreset }}"
+          {{- end -}}`}}
+
+        vault.hashicorp.com/agent-inject-secret-mongodb: "kv/preprod/database/mongo"
+        vault.hashicorp.com/agent-inject-template-mongodb: |
+          {{`{{- with secret "kv/preprod/database/mongo" -}}
+          MONGODB_DATABASE="{{ .Data.data.portfoliodatabase }}"
+          MONGODB_URI= {{ .Data.data.uri }}/{{ .Data.data.portfoliodatabase }}?authSource={{ .Data.data.authsource }}
+          {{- end -}}`}}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "am-document-processor.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: vault-auth
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "ghcr.io/am-portfolio/am-document-processor/am-document-processor:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: Always
+          # Load environment variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: {{ include "am-document-processor.fullname" . }}-config
+          
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # Health checks with retry-based thresholds
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: {{ .Values.config.documentProcessing.maxRetries }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: {{ .Values.config.documentProcessing.maxRetries }}
+          # Resource limits from values file
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
