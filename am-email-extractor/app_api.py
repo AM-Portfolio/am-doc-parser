@@ -33,6 +33,12 @@ CORS(app, resources={
     }
 })
 
+@app.after_request
+def add_cors_headers(response):
+    if request.method == 'OPTIONS':
+        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+    return response
+
 # Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')

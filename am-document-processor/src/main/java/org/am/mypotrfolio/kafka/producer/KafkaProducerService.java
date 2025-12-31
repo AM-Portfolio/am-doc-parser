@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class KafkaProducerService {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -25,23 +24,37 @@ public class KafkaProducerService {
     @Value("${app.kafka.trade-topic}")
     private String tradeTopic;
 
-
-    public void sendMessage(PortfolioUpdateEvent portfolioUpdateEvent) {
-        RecordHeaders headers = buildCommonHeaders(
-            portfolioUpdateEvent.getId(),
-            portfolioUpdateEvent.getUserId(),
-            portfolioUpdateEvent.getTimestamp()
-        );
-        sendKafkaMessage(portfolioTopic, portfolioUpdateEvent.getId().toString(), portfolioUpdateEvent, headers);
+    public KafkaProducerService(
+            @org.springframework.beans.factory.annotation.Autowired(required = false) KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void sendTradeUpdateEvent(TradeUpdateEvent tradeUpdateEvent) {
+    public void sendPortfolioUpdate(PortfolioUpdateEvent event) {
+        if (kafkaTemplate == null) {
+            log.warn("Kafka is disabled. Portfolio update not sent: {}", event);
+            return;
+        }
+
+        log.info("Sending portfolio update event: {}", event);
         RecordHeaders headers = buildCommonHeaders(
-            tradeUpdateEvent.getId(),
-            tradeUpdateEvent.getUserId(),
-            tradeUpdateEvent.getTimestamp()
-        );
-        sendKafkaMessage(tradeTopic, tradeUpdateEvent.getId().toString(), tradeUpdateEvent, headers);
+                event.getId(),
+                event.getUserId(),
+                event.getTimestamp());
+        sendKafkaMessage(portfolioTopic, event.getId().toString(), event, headers);
+    }
+
+    public void sendTradeUpdate(TradeUpdateEvent event) {
+        if (kafkaTemplate == null) {
+            log.warn("Kafka is disabled. Trade update not sent: {}", event);
+            return;
+        }
+
+        log.info("Sending trade update event: {}", event);
+        RecordHeaders headers = buildCommonHeaders(
+                event.getId(),
+                event.getUserId(),
+                event.getTimestamp());
+        sendKafkaMessage(tradeTopic, event.getId().toString(), event, headers);
     }
 
     private RecordHeaders buildCommonHeaders(UUID id, String userId, Object timestamp) {
@@ -55,16 +68,16 @@ public class KafkaProducerService {
     private void sendKafkaMessage(String topicName, String key, Object event, RecordHeaders headers) {
         ProducerRecord<String, Object> record = new ProducerRecord<>(topicName, null, key, event, headers);
         kafkaTemplate.send(record)
-            .whenComplete((result, ex) -> {
-                if (ex == null) {
-                    log.info("Message sent successfully to topic: {}, partition: {}, offset: {}", 
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset());
-                } else {
-                    log.error("Failed to send message", ex);
-                }
-            });
+                .whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        log.info("Message sent successfully to topic: {}, partition: {}, offset: {}",
+                                result.getRecordMetadata().topic(),
+                                result.getRecordMetadata().partition(),
+                                result.getRecordMetadata().offset());
+                    } else {
+                        log.error("Failed to send message", ex);
+                    }
+                });
     }
 
 }

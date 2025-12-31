@@ -1,4 +1,4 @@
-MONGODB_URL: mongodb://ssd2658:ssd2658@localhost:27017/portfolio?authSource=admin
+MONGODB_URL: mongodb://admin:password123@localhost:27017/portfolio?authSource=admin
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS: localhost:9092
@@ -37,6 +37,7 @@ spring:
 
 app:
   kafka:
+    enabled: false
     portfolio-topic: am-portfolio
     trade-topic: am-trade
 

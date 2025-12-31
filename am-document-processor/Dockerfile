@@ -5,24 +5,26 @@ FROM eclipse-temurin:17-jdk-jammy AS builder
 
 WORKDIR /app
 
+# Build arguments for GitHub Packages auth
+ARG GITHUB_PACKAGES_USERNAME
+ARG GITHUB_PACKAGES_TOKEN
+
 # Copy Maven Wrapper and configuration
 COPY .mvn/ .mvn
-COPY mvnw pom.xml settings.xml ./
+COPY mvnw pom.xml mvn_settings.xml ./
 
 # Convert line endings for mvnw just in case
 RUN sed -i 's/\r$//' mvnw
 RUN chmod +x mvnw
 
-# Download dependencies (using settings.xml for auth)
-# We don't pass args here since settings.xml already has the hardcoded token now.
-# But good practice is to still allow overrides if needed.
-RUN ./mvnw dependency:go-offline -s settings.xml
+# Download dependencies (using settings for auth)
+RUN ./mvnw dependency:go-offline -s mvn_settings.xml
 
 # Copy source code
 COPY src ./src
 
 # Build the JAR
-RUN ./mvnw clean package -DskipTests -s settings.xml
+RUN ./mvnw clean package -DskipTests -s mvn_settings.xml
 
 
 # ===============================
@@ -45,9 +47,9 @@ RUN apt-get update && \
 ENV SPRING_PROFILES_ACTIVE=docker
 ENV TZ=Asia/Kolkata
 
-EXPOSE 8070
+EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=10s --start-period=60s --retries=5 \
-  CMD curl -f http://localhost:8070/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

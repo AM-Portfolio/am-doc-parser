@@ -4,8 +4,8 @@ from datetime import datetime
 
 class Database:
     def __init__(self):
-        self.mongo_uri = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
-        self.db_name = os.environ.get('MONGO_DB_NAME', 'portfolio_db')
+        self.mongo_uri = os.environ.get('MONGODB_URL', 'mongodb://admin:password123@localhost:27017/portfolio?authSource=admin')
+        self.db_name = os.environ.get('MONGO_DATABASE', 'portfolio')
         self.client = None
         self.db = None
         

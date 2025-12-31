@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class KafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers}")
@@ -24,10 +25,10 @@ public class KafkaConfig {
 
     @Value("${spring.kafka.properties.security.protocol}")
     private String securityProtocol;
-    
+
     @Value("${spring.kafka.properties.sasl.mechanism}")
     private String saslMechanism;
-    
+
     @Value("${spring.kafka.properties.sasl.jaas.config}")
     private String jaasConfig;
 
@@ -57,7 +58,7 @@ public class KafkaConfig {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-        if(jaasConfig != null && !jaasConfig.isEmpty()) {
+        if (jaasConfig != null && !jaasConfig.isEmpty()) {
             props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
             props.put(SaslConfigs.SASL_MECHANISM, saslMechanism);
             props.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfig);
