@@ -88,14 +88,13 @@ public class SecurityConfig {
                                 .formLogin(form -> form.disable());
 
                 return http.build();
-        }
+    }
 
-        @Bean
-        public JwtDecoder jwtDecoder() {
-                SecretKey key = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
-                return NimbusJwtDecoder.withSecretKey(key).build();
-        }
-
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
+        return NimbusJwtDecoder.withSecretKey(key).build();
+    }
 }
 
         @Bean
