@@ -39,33 +39,42 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public List<TradeModel> processTradeFile(DocumentRequest documentRequest) {
-        
-        log.info("[ProcessId: {}] Starting to process trade file: {}", documentRequest.getRequestId(), documentRequest.getFile().getOriginalFilename());
+
+        log.info("[ProcessId: {}] Starting to process trade file: {}", documentRequest.getRequestId(),
+                documentRequest.getFile().getOriginalFilename());
         try {
             // Process the file using appropriate processor
             log.debug("[ProcessId: {}] Getting file processor for file type", documentRequest.getRequestId());
             List<Map<String, String>> fileData = fileProcessorFactory.getProcessor(documentRequest.getFile())
                     .processFile(documentRequest.getFile(), documentRequest);
-            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects", documentRequest.getRequestId());
-            return processTradeFileAndGetTradeList(fileData, documentRequest.getBrokerType(), documentRequest.getRequestId());
+            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects",
+                    documentRequest.getRequestId());
+            return processTradeFileAndGetTradeList(fileData, documentRequest.getBrokerType(),
+                    documentRequest.getRequestId());
         } catch (Exception e) {
-            log.error("[ProcessId: {}] Error processing trade file: {}", documentRequest.getRequestId(), e.getMessage(), e);
+            log.error("[ProcessId: {}] Error processing trade file: {}", documentRequest.getRequestId(), e.getMessage(),
+                    e);
             throw e;
         }
     }
-    
+
     @SneakyThrows
-    public List<TradeModel> processTradeFileAndGetTradeList(List<Map<String, String>> fileData, BrokerType brokerType, UUID processId) {
+    public List<TradeModel> processTradeFileAndGetTradeList(List<Map<String, String>> fileData, BrokerType brokerType,
+            UUID processId) {
         TradeMapper tradeMapper = new TradeMapper();
+        if (!fileData.isEmpty()) {
+            log.info("[ProcessId: {}] First record keys: {}", processId, fileData.get(0).keySet());
+        }
         // Convert the data to StockPortfolio objects
         String payload = objectMapper.writeValueAsString(fileData);
-        List<Trade> trades = objectMapper.readValue(payload, new TypeReference<List<Trade>>() {});
-        
+        List<Trade> trades = objectMapper.readValue(payload, new TypeReference<List<Trade>>() {
+        });
+
         // For Zerodha, aggregate trades with the same order ID
         if (BrokerType.ZERODHA.equals(brokerType)) {
             trades = aggregateZerodhaTrades(trades, processId);
         }
-        
+
         // Convert to TradeModels
         List<TradeModel> tradeList = new ArrayList<>();
         for (Trade trade : trades) {
@@ -76,7 +85,7 @@ public class TradeServiceImpl implements TradeService {
         log.info("[ProcessId: {}] Successfully processed {} trade entries", processId, tradeList.size());
         return tradeList;
     }
-    
+
     /**
      * Aggregates Zerodha trades with the same order ID.
      * For trades with the same order ID:
@@ -84,7 +93,7 @@ public class TradeServiceImpl implements TradeService {
      * - Prices are weighted averaged based on quantity
      * - Other attributes are taken from the first trade
      *
-     * @param trades List of trades to aggregate
+     * @param trades    List of trades to aggregate
      * @param processId Process ID for logging
      * @return List of aggregated trades
      */
@@ -92,21 +101,21 @@ public class TradeServiceImpl implements TradeService {
         if (trades == null || trades.isEmpty()) {
             return trades;
         }
-        
+
         log.debug("[ProcessId: {}] Aggregating Zerodha trades by order ID", processId);
-        
+
         // Group trades by order ID
         Map<String, List<Trade>> tradesByOrderId = trades.stream()
                 .filter(trade -> trade.getOrderId() != null && !trade.getOrderId().isEmpty())
                 .collect(Collectors.groupingBy(Trade::getOrderId));
-        
+
         List<Trade> aggregatedTrades = new ArrayList<>();
-        
+
         // Process each group of trades with the same order ID
         for (Map.Entry<String, List<Trade>> entry : tradesByOrderId.entrySet()) {
             String orderId = entry.getKey();
             List<Trade> tradesWithSameOrderId = entry.getValue();
-            
+
             if (tradesWithSameOrderId.size() == 1) {
                 // If there's only one trade with this order ID, no need to aggregate
                 aggregatedTrades.add(tradesWithSameOrderId.get(0));
@@ -114,22 +123,22 @@ public class TradeServiceImpl implements TradeService {
                 // Aggregate trades with the same order ID
                 Trade aggregatedTrade = aggregateTradesWithSameOrderId(tradesWithSameOrderId);
                 aggregatedTrades.add(aggregatedTrade);
-                log.debug("[ProcessId: {}] Aggregated {} trades with order ID: {}", 
+                log.debug("[ProcessId: {}] Aggregated {} trades with order ID: {}",
                         processId, tradesWithSameOrderId.size(), orderId);
             }
         }
-        
+
         // Add any trades without order IDs
         trades.stream()
                 .filter(trade -> trade.getOrderId() == null || trade.getOrderId().isEmpty())
                 .forEach(aggregatedTrades::add);
-        
-        log.info("[ProcessId: {}] Aggregated {} trades into {} trades", 
+
+        log.info("[ProcessId: {}] Aggregated {} trades into {} trades",
                 processId, trades.size(), aggregatedTrades.size());
-        
+
         return aggregatedTrades;
     }
-    
+
     /**
      * Aggregates a list of trades with the same order ID into a single trade.
      *
@@ -140,27 +149,28 @@ public class TradeServiceImpl implements TradeService {
         if (trades == null || trades.isEmpty()) {
             return null;
         }
-        
+
         // Use the first trade as the base
         Trade baseTrade = trades.get(0);
-        
+
         // Calculate total quantity and weighted average price
         BigDecimal totalQuantity = BigDecimal.ZERO;
         BigDecimal weightedPriceSum = BigDecimal.ZERO;
-        
+
         for (Trade trade : trades) {
             // Sum up quantities
             totalQuantity = totalQuantity.add(trade.getQuantity());
-            
+
             // Calculate weighted price
             BigDecimal weightedPrice = trade.getPrice().multiply(trade.getQuantity());
             weightedPriceSum = weightedPriceSum.add(weightedPrice);
         }
-        
+
         // Calculate weighted average price
-        BigDecimal averagePrice = totalQuantity.compareTo(BigDecimal.ZERO) > 0 ?
-                weightedPriceSum.divide(totalQuantity, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-        
+        BigDecimal averagePrice = totalQuantity.compareTo(BigDecimal.ZERO) > 0
+                ? weightedPriceSum.divide(totalQuantity, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
         // Create a new aggregated trade
         return Trade.builder()
                 .symbol(baseTrade.getSymbol())

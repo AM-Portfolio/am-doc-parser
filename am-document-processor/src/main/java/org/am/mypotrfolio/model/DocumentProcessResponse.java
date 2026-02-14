@@ -14,4 +14,7 @@ public class DocumentProcessResponse {
     private String fileName;
     private ProcessingStatus status;
     private String message;
+    private int totalRecords;
+    private java.util.List<?> data;
+
 }

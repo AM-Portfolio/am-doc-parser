@@ -100,7 +100,8 @@ public class DocumentProcessorController {
             @Parameter(description = "Type of document being processed", required = true) @RequestParam("documentType") DocumentType documentType,
             @Parameter(description = "Portfolio ID (optional)", required = false) @RequestParam(value = "portfolioId", required = false) String portfolioId,
             @Parameter(description = "Explicit Broker Type (optional)", required = false) @RequestParam(value = "brokerType", required = false) BrokerType brokerType,
-            @RequestHeader(value = "X-User-ID", required = true) String userId) { // ← API Gateway provides this
+            @RequestHeader(value = "X-User-ID", required = true) String userId, // ← API Gateway provides this
+            @Parameter(description = "Document Password (optional)", required = false) @RequestParam(value = "password", required = false) String password) {
 
         log.info("Processing document for user: {}, type: {}, portfolio: {}, broker: {}",
                 userId, documentType, portfolioId, brokerType);
@@ -112,7 +113,8 @@ public class DocumentProcessorController {
                     documentType,
                     portfolioId,
                     brokerType, // Pass explicit broker type
-                    userId // ← Directly from API Gateway header
+                    userId, // ← Directly from API Gateway header
+                    password // Pass password
             );
 
             return ResponseEntity.ok(response);

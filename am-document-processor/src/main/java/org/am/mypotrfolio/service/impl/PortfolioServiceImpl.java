@@ -46,6 +46,10 @@ public class PortfolioServiceImpl implements PortfolioService {
                     .processFile(portfolioRequest.getFile(), portfolioRequest);
             log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects",
                     portfolioRequest.getRequestId());
+            if (!fileData.isEmpty()) {
+                log.info("[ProcessId: {}] First record keys: {}", portfolioRequest.getRequestId(),
+                        fileData.get(0).keySet());
+            }
 
             // Filter for Equity rows (Quantity field presence)
             List<Map<String, String>> equityData = fileData.stream()
@@ -132,18 +136,30 @@ public class PortfolioServiceImpl implements PortfolioService {
         });
         // Convert to AssetModels
         List<EquityModel> portfolioAssets = new ArrayList<>();
+        boolean useDb = true;
         for (StockAsset stock : portfolios) {
             log.debug("[ProcessId: {}] Processing stock: {}", processId, stock.getSymbol());
             // Try to find NSE security by name or other identifiers
-            var assetModel = getAssetModel(stock, brokerType);
-            portfolioAssets.add(assetModel);
+            try {
+                var assetModel = getAssetModel(stock, brokerType, useDb);
+                portfolioAssets.add(assetModel);
+            } catch (RuntimeException e) {
+                if ("DB_DOWN".equals(e.getMessage())) {
+                    log.warn("Updates to DB failed, disabling DB for rest of processing");
+                    useDb = false;
+                    var assetModel = getAssetModel(stock, brokerType, false);
+                    portfolioAssets.add(assetModel);
+                } else {
+                    throw e;
+                }
+            }
         }
         log.info("[ProcessId: {}] Successfully processed {} portfolio entries", processId, portfolioAssets.size());
         return portfolioAssets;
     }
 
     @SuppressWarnings("rawtypes")
-    private EquityModel getAssetModel(StockAsset stock, BrokerType brokerType) {
+    private EquityModel getAssetModel(StockAsset stock, BrokerType brokerType, boolean useDb) {
         var quantity = getDouble(stock.getQuantity());
         var avgBuyingPrice = stock.getAvgPrice() != null ? getDouble(stock.getAvgPrice()) : 0.0;
         var investedValue = stock.getInvestmentValue() != null ? getDouble(stock.getInvestmentValue())
@@ -157,28 +173,47 @@ public class PortfolioServiceImpl implements PortfolioService {
                 .investmentValue(investedValue)
                 .name(stock.getName());
 
-        if (brokerType != null
+        if (useDb && brokerType != null
                 && (brokerType.isDhan() || brokerType.isMStock() || brokerType.isGrow() || brokerType.isAngelOne())) {
-            Optional<SecurityModel> nseSecurity = findBestMatchBySearchParam(
-                    (brokerType.isDhan() || brokerType.isGrow() || brokerType.isAngelOne()) ? stock.getName()
-                            : stock.getSymbol());
-            if (nseSecurity.isPresent()) {
-                SecurityModel security = nseSecurity.get();
-                stock.setIsin(security.getKey().getIsin());
+            // Only try if we haven't failed before
+            try {
+                Optional<SecurityModel> nseSecurity = findBestMatchBySearchParam(
+                        (brokerType.isDhan() || brokerType.isGrow() || brokerType.isAngelOne()) ? stock.getName()
+                                : stock.getSymbol());
+                if (nseSecurity.isPresent()) {
+                    SecurityModel security = nseSecurity.get();
+                    stock.setIsin(security.getKey().getIsin());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to find best match for stock: {} due to {}", stock.getSymbol(), e.getMessage());
+                // Don't disable here as this might be specific to search
+                throw new RuntimeException("DB_DOWN");
             }
         }
 
         // if (stock.getIsin() == null || stock.getIsin().isEmpty()) {
-        Optional<SecurityModel> nseSecurity = securityService.findByKey(stock.getIsin());
-        // Enhance asset with NSE security information if available
-        if (nseSecurity.isPresent()) {
-            SecurityModel security = nseSecurity.get();
-            assetBuilder.isin(security.getKey().getIsin());
-            assetBuilder.symbol(security.getKey().getSymbol());
-            assetBuilder.name(security.getMetadata().getSecurityName());
-            assetBuilder.industry(security.getMetadata().getIndustry());
-            assetBuilder.sector(security.getMetadata().getSector());
-            assetBuilder.marketCap(security.getMetadata().getMarketCapType().getName());
+        if (useDb) {
+            try {
+                // Circuit breaker - skip if we know DB is down (simulated by simple check, or
+                // just let first one fail)
+
+                Optional<SecurityModel> nseSecurity = securityService.findByKey(stock.getIsin());
+                // Enhance asset with NSE security information if available
+                if (nseSecurity.isPresent()) {
+                    SecurityModel security = nseSecurity.get();
+                    assetBuilder.isin(security.getKey().getIsin());
+                    assetBuilder.symbol(security.getKey().getSymbol());
+                    assetBuilder.name(security.getMetadata().getSecurityName());
+                    assetBuilder.industry(security.getMetadata().getIndustry());
+                    assetBuilder.sector(security.getMetadata().getSector());
+                    assetBuilder.marketCap(security.getMetadata().getMarketCapType().getName());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enhance asset with NSE security info for ISIN: {} due to {}", stock.getIsin(),
+                        e.getMessage());
+                // We should rethrow or signal to caller to stop trying?
+                throw new RuntimeException("DB_DOWN");
+            }
         }
         // }
         return assetBuilder.build();

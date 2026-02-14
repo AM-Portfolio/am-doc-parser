@@ -24,4 +24,5 @@ public class DocumentRequest {
     private MultipartFile file;
     private String portfolioId;
     private String userId;
+    private String password;
 }

@@ -38,7 +38,7 @@ public abstract class AbstractFileProcessor implements FileProcessor {
                 return parseGrowFile(file);
             } else if (brokerType.isAngelOne()) {
                 log.debug("Using Angel One parser");
-                return parseAngelOneFile(file);
+                return parseAngelOneFile(file, documentRequest.getPassword());
             }
             log.debug("Using default Dhan parser");
             return parseDhanFile(file);
@@ -58,7 +58,8 @@ public abstract class AbstractFileProcessor implements FileProcessor {
 
     protected abstract List<Map<String, String>> parseGrowFile(MultipartFile file) throws Exception;
 
-    protected abstract List<Map<String, String>> parseAngelOneFile(MultipartFile file) throws Exception;
+    protected abstract List<Map<String, String>> parseAngelOneFile(MultipartFile file, String password)
+            throws Exception;
 
     protected abstract List<Map<String, String>> parseNseSecurityFile(MultipartFile file) throws Exception;
 
@@ -67,7 +68,7 @@ public abstract class AbstractFileProcessor implements FileProcessor {
         boolean hasData = false;
 
         for (int i = 0; i < headers.length && i < values.length; i++) {
-            String value = values[i].trim();
+            String value = values[i] != null ? values[i].trim() : "";
             if (!value.isEmpty()) {
                 hasData = true;
             }

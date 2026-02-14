@@ -1,7 +1,7 @@
 package org.am.mypotrfolio.domain.common;
 
 public enum DocumentType {
-    BROKER_PORTFOLIO("Broker_Portfolio"),
+    COMBINE_PORTFOLIO("Combine_Portfolio"),
     MUTUAL_FUND("Mutual_Fund"),
     NPS_STATEMENT("NPS_Statement"),
     COMPANY_FINANCIAL_REPORT("Company_Financial_Report"),
@@ -30,8 +30,8 @@ public enum DocumentType {
         return documentType;
     }
 
-    public boolean isBrokerPortfolio() {
-        return "Broker_Portfolio".equals(documentType);
+    public boolean isCombinePortfolio() {
+        return "Combine_Portfolio".equals(documentType);
     }
 
     public boolean isMutualFund() {
