@@ -8,10 +8,11 @@ public enum DocumentType {
     STOCK_PORTFOLIO("Stock_Portfolio"),
     NSE_INDICES("NSE_Indices"),
     TRADE_FNO("Trade_FNO"),
-    TRADE_EQ("Trade_EQ");
-    
+    TRADE_EQ("Trade_EQ"),
+    TRADE_MF("Trade_MF");
+
     private String documentType;
-        
+
     DocumentType(String documentType) {
         this.documentType = documentType;
     }
@@ -24,7 +25,6 @@ public enum DocumentType {
         }
         return null;
     }
-    
 
     public String getCode() {
         return documentType;
@@ -60,5 +60,9 @@ public enum DocumentType {
 
     public boolean isTradeEq() {
         return "Trade_EQ".equals(documentType);
+    }
+
+    public boolean isTradeMf() {
+        return "Trade_MF".equals(documentType);
     }
 }

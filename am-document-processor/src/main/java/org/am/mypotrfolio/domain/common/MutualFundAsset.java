@@ -14,39 +14,43 @@ import lombok.NoArgsConstructor;
 public class MutualFundAsset {
 
     @JsonProperty("schemeName")
-    @JsonAlias({"Scheme Name"})
+    @JsonAlias({ "Scheme Name" })
     private String schemeName;
 
     @JsonProperty("amc")
-    @JsonAlias({"AMC"})
+    @JsonAlias({ "AMC" })
     private String amc;
 
+    @JsonProperty("isin")
+    @JsonAlias({ "ISIN", "Isin", "isin" })
+    private String isin;
+
     @JsonProperty("category")
-    @JsonAlias({"Category"})
+    @JsonAlias({ "Category" })
     private String category;
 
     @JsonProperty("subCategory")
-    @JsonAlias({"Sub-category"})
+    @JsonAlias({ "Sub-category" })
     private String subCategory;
 
     @JsonProperty("folioNo")
-    @JsonAlias({"Folio No."})
+    @JsonAlias({ "Folio No." })
     private String folioNo;
 
     @JsonProperty("units")
-    @JsonAlias({"Units"})
+    @JsonAlias({ "Units" })
     private String units;
 
     @JsonProperty("investedValue")
-    @JsonAlias({"Invested Value"})
+    @JsonAlias({ "Invested Value" })
     private String investedValue;
 
     @JsonProperty("currentValue")
-    @JsonAlias({"Current Value"})
+    @JsonAlias({ "Current Value" })
     private String currentValue;
 
     @JsonProperty("xirr")
-    @JsonAlias({"XIRR"})
+    @JsonAlias({ "XIRR" })
     private String xirr;
 
 }

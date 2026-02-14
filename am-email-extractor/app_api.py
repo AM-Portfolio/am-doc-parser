@@ -130,16 +130,25 @@ def list_brokers():
 # Gmail OAuth Endpoints
 # ============================================================================
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - [%(filename)s:%(funcName)s] - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 @app.route(f'/api/{API_VERSION}/gmail/connect', methods=['GET'])
 @require_jwt
 def gmail_connect():
     """Start Gmail OAuth flow"""
+    logger.info(f"Entry: gmail_connect for user_id={getattr(request, 'user_id', 'unknown')}")
     try:
         user_id = request.user_id
-        creds, flow, token_file = gmail_integration.get_credentials(user_id)
+        logger.debug(f"Getting credentials for user_id: {user_id}")
+        creds, flow, _ = gmail_integration.get_credentials(user_id)
         
         if creds:
-            # Already authenticated
+            logger.info("User already authenticated")
             user_info = gmail_integration.get_user_info(creds)
             return jsonify({
                 'connected': True,
@@ -148,22 +157,24 @@ def gmail_connect():
             })
         
         if not flow:
+            logger.error("Failed to initialize OAuth flow")
             return jsonify({'error': 'Failed to initialize OAuth flow'}), 500
         
         # Generate authorization URL
         authorization_url, state = flow.authorization_url(
             access_type='offline',
-            include_granted_scopes='true'
+            prompt='consent'
         )
         
         # Store state for verification during callback
+        # We still use a temporary file for STATE because callback needs to verify state
+        # State is short-lived and doesn't contain sensitive credentials, just a nonce
         state_file = os.path.join('user_tokens', f'state_{state}.json')
         os.makedirs('user_tokens', exist_ok=True)
         with open(state_file, 'w') as f:
             import json
             json.dump({
                 'user_id': user_id,
-                'token_file': token_file,
                 'state': state
             }, f)
         
@@ -197,7 +208,6 @@ def gmail_callback():
         with open(state_file, 'r') as f:
             state_data = json.load(f)
             user_id = state_data['user_id']
-            token_file = state_data['token_file']
         
         # Clean up state file
         os.remove(state_file)
@@ -217,10 +227,9 @@ def gmail_callback():
             traceback.print_exc()
             return jsonify({'error': f'Auth failed: {str(e)}'}), 401
         
-        # Save credentials
+        # Save credentials to Database
         import pickle
-        with open(token_file, 'wb') as token:
-            pickle.dump(flow.credentials, token)
+        database.get_db().save_user_token(user_id, pickle.dumps(flow.credentials))
         
         # Get user info
         user_info = gmail_integration.get_user_info(flow.credentials)
@@ -245,6 +254,7 @@ def gmail_status():
     """Check Gmail connection status"""
     try:
         user_id = request.user_id
+        logger.debug(f"Checking status for user_id: {user_id}")
         service, _, _ = gmail_integration.get_gmail_service(user_id)
         
         if service:
@@ -270,13 +280,8 @@ def gmail_disconnect():
     """Disconnect Gmail account"""
     try:
         user_id = request.user_id
-        token_file = os.path.join('user_tokens', f'{user_id}.pickle')
-        
-        if os.path.exists(token_file):
-            os.remove(token_file)
-            return jsonify({'message': 'Gmail disconnected successfully'})
-        else:
-            return jsonify({'message': 'Gmail was not connected'})
+        database.get_db().delete_user_token(user_id)
+        return jsonify({'message': 'Gmail disconnected successfully'})
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500

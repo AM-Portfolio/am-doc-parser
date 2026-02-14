@@ -50,31 +50,33 @@ BROKER_PATTERNS = {
 def get_credentials(user_id=None):
     """Get Gmail API credentials for a specific user"""
     creds = None
+    import database
     
-    # Create tokens directory if it doesn't exist
-    tokens_dir = 'user_tokens'
-    if not os.path.exists(tokens_dir):
-        os.makedirs(tokens_dir)
-    
-    # Use user_id to create separate token file for each user
+    # Use database for token storage if user_id is provided
     if user_id:
-        token_file = os.path.join(tokens_dir, f'token_{user_id}.pickle')
+        try:
+            token_data = database.get_db().get_user_token(user_id)
+            if token_data:
+                creds = pickle.loads(token_data)
+        except Exception as e:
+            print(f"Error loading token from DB: {e}")
+            creds = None
     else:
-        # Fallback to single token for backwards compatibility
-        token_file = 'token.pickle'
-    
-    # Check if we have a token file for this user
-    if os.path.exists(token_file):
-        with open(token_file, 'rb') as token:
-            creds = pickle.load(token)
+        # Fallback to local file for backward compatibility or no-user checks
+        if os.path.exists('token.pickle'):
+            with open('token.pickle', 'rb') as token:
+                creds = pickle.load(token)
     
     # If credentials are invalid or don't exist
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
             # Save refreshed credentials
-            with open(token_file, 'wb') as token:
-                pickle.dump(creds, token)
+            if user_id:
+                database.get_db().save_user_token(user_id, pickle.dumps(creds))
+            else:
+                with open('token.pickle', 'wb') as token:
+                    pickle.dump(creds, token)
         else:
             # Create credentials from environment variables
             client_id = os.environ.get('GOOGLE_CLIENT_ID')
@@ -97,6 +99,8 @@ def get_credentials(user_id=None):
                 api_version = os.environ.get('API_VERSION', 'v1')
                 redirect_uri = f'http://localhost:{port}/api/{api_version}/gmail/callback'
             
+            print(f"DEBUG: Using OAuth Redirect URI: {redirect_uri}")
+            
             # For web flow, we need redirect URI
             client_config = {
                 "web": {
@@ -114,22 +118,23 @@ def get_credentials(user_id=None):
                 redirect_uri=redirect_uri
             )
             
-            return None, flow, token_file
+            # We don't save here yet, as we need the flow to complete
+            return None, flow, None # No token file path needed anymore
         
-        # Save credentials for next time
-        with open(token_file, 'wb') as token:
-            pickle.dump(creds, token)
+        # Save credentials for next time (re-save if valid)
+        if user_id and creds and creds.valid:
+            database.get_db().save_user_token(user_id, pickle.dumps(creds))
     
-    return creds, None, token_file
+    return creds, None, None
 
 def get_gmail_service(user_id=None):
     """Get authenticated Gmail API service for a specific user"""
-    creds, flow, token_file = get_credentials(user_id)
+    creds, flow, _ = get_credentials(user_id)
     
     if flow:
-        return None, flow, token_file
+        return None, flow, None
     
-    return build('gmail', 'v1', credentials=creds), None, token_file
+    return build('gmail', 'v1', credentials=creds), None, None
 
 def get_user_info(creds):
     """Get user information from Google"""

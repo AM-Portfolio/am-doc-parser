@@ -34,55 +34,76 @@ public class PortfolioServiceImpl implements PortfolioService {
     private final SecurityService securityService;
     private final ObjectMapper objectMapper;
 
-
     @Override
     public List<EquityModel> processEquityFile(DocumentRequest portfolioRequest) {
-        
-        log.info("[ProcessId: {}] Starting to process stokcs portfolio file: {}", portfolioRequest.getRequestId(), portfolioRequest.getFile().getOriginalFilename());
+
+        log.info("[ProcessId: {}] Starting to process stokcs portfolio file: {}", portfolioRequest.getRequestId(),
+                portfolioRequest.getFile().getOriginalFilename());
         try {
             // Process the file using appropriate processor
             log.debug("[ProcessId: {}] Getting file processor for file type", portfolioRequest.getRequestId());
             List<Map<String, String>> fileData = fileProcessorFactory.getProcessor(portfolioRequest.getFile())
                     .processFile(portfolioRequest.getFile(), portfolioRequest);
-            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects", portfolioRequest.getRequestId());
-            return processPortfolioFileAndGetAssets(fileData, portfolioRequest.getBrokerType(), portfolioRequest.getRequestId());
+            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects",
+                    portfolioRequest.getRequestId());
+
+            // Filter for Equity rows (Quantity field presence)
+            List<Map<String, String>> equityData = fileData.stream()
+                    .filter(row -> row.containsKey("Quantity"))
+                    .toList();
+
+            return processPortfolioFileAndGetAssets(equityData, portfolioRequest.getBrokerType(),
+                    portfolioRequest.getRequestId());
         } catch (Exception e) {
-            log.error("[ProcessId: {}] Error processing portfolio file: {}", portfolioRequest.getRequestId(), e.getMessage(), e);
+            log.error("[ProcessId: {}] Error processing portfolio file: {}", portfolioRequest.getRequestId(),
+                    e.getMessage(), e);
             throw e;
         }
     }
 
     @Override
     public List<MutualFundModel> processMutualFundFile(DocumentRequest portfolioRequest) {
-        log.info("[ProcessId: {}] Starting to process mutual funds portfolio file: {}", portfolioRequest.getRequestId(), portfolioRequest.getFile().getOriginalFilename());
+        log.info("[ProcessId: {}] Starting to process mutual funds portfolio file: {}", portfolioRequest.getRequestId(),
+                portfolioRequest.getFile().getOriginalFilename());
         try {
             // Process the file using appropriate processor
             log.debug("[ProcessId: {}] Getting file processor for file type", portfolioRequest.getRequestId());
             List<Map<String, String>> fileData = fileProcessorFactory.getProcessor(portfolioRequest.getFile())
                     .processFile(portfolioRequest.getFile(), portfolioRequest);
-            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects", portfolioRequest.getRequestId());
-            return processMutualFundsPortfolioFileAndGetAssets(fileData, portfolioRequest.getBrokerType(), portfolioRequest.getRequestId());
+            log.debug("[ProcessId: {}] Successfully processed file data, converting to StockPortfolio objects",
+                    portfolioRequest.getRequestId());
+
+            // Filter for Mutual Fund rows (Units field presence)
+            List<Map<String, String>> mfData = fileData.stream()
+                    .filter(row -> row.containsKey("Units"))
+                    .toList();
+
+            return processMutualFundsPortfolioFileAndGetAssets(mfData, portfolioRequest.getBrokerType(),
+                    portfolioRequest.getRequestId());
         } catch (Exception e) {
-            log.error("[ProcessId: {}] Error processing portfolio file: {}", portfolioRequest.getRequestId(), e.getMessage(), e);
+            log.error("[ProcessId: {}] Error processing portfolio file: {}", portfolioRequest.getRequestId(),
+                    e.getMessage(), e);
             throw e;
         }
     }
 
     @SneakyThrows
-    public List<MutualFundModel> processMutualFundsPortfolioFileAndGetAssets(List<Map<String, String>> fileData, BrokerType brokerType, UUID processId) {
-       // Convert the data to StockPortfolio objects
-       String payload = objectMapper.writeValueAsString(fileData);
-       List<MutualFundAsset> portfolios = objectMapper.readValue(payload, new TypeReference<List<MutualFundAsset>>() {});
+    public List<MutualFundModel> processMutualFundsPortfolioFileAndGetAssets(List<Map<String, String>> fileData,
+            BrokerType brokerType, UUID processId) {
+        // Convert the data to StockPortfolio objects
+        String payload = objectMapper.writeValueAsString(fileData);
+        List<MutualFundAsset> portfolios = objectMapper.readValue(payload, new TypeReference<List<MutualFundAsset>>() {
+        });
         // Convert to AssetModels
-            List<MutualFundModel> portfolioAssets = new ArrayList<>();
-            for (MutualFundAsset mutualFund : portfolios) {
-                log.debug("[ProcessId: {}] Processing mutual funds: {}", processId, mutualFund.getSchemeName());
-                // Try to find NSE security by name or other identifiers
-                var assetModel = getMutualFundModel(mutualFund, brokerType);
-                portfolioAssets.add(assetModel);
-            }
-       log.info("[ProcessId: {}] Successfully processed {} portfolio entries", processId, portfolioAssets.size());
-       return portfolioAssets;
+        List<MutualFundModel> portfolioAssets = new ArrayList<>();
+        for (MutualFundAsset mutualFund : portfolios) {
+            log.debug("[ProcessId: {}] Processing mutual funds: {}", processId, mutualFund.getSchemeName());
+            // Try to find NSE security by name or other identifiers
+            var assetModel = getMutualFundModel(mutualFund, brokerType);
+            portfolioAssets.add(assetModel);
+        }
+        log.info("[ProcessId: {}] Successfully processed {} portfolio entries", processId, portfolioAssets.size());
+        return portfolioAssets;
     }
 
     @SuppressWarnings("rawtypes")
@@ -103,20 +124,22 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     @SneakyThrows
-    public List<EquityModel> processPortfolioFileAndGetAssets(List<Map<String, String>> fileData, BrokerType brokerType, UUID processId) {
-       // Convert the data to StockPortfolio objects
-       String payload = objectMapper.writeValueAsString(fileData);
-       List<StockAsset> portfolios = objectMapper.readValue(payload, new TypeReference<List<StockAsset>>() {});
+    public List<EquityModel> processPortfolioFileAndGetAssets(List<Map<String, String>> fileData, BrokerType brokerType,
+            UUID processId) {
+        // Convert the data to StockPortfolio objects
+        String payload = objectMapper.writeValueAsString(fileData);
+        List<StockAsset> portfolios = objectMapper.readValue(payload, new TypeReference<List<StockAsset>>() {
+        });
         // Convert to AssetModels
-            List<EquityModel> portfolioAssets = new ArrayList<>();
-            for (StockAsset stock : portfolios) {
-                log.debug("[ProcessId: {}] Processing stock: {}", processId, stock.getSymbol());
-                // Try to find NSE security by name or other identifiers
-                var assetModel = getAssetModel(stock, brokerType);
-                portfolioAssets.add(assetModel);
-            }
-       log.info("[ProcessId: {}] Successfully processed {} portfolio entries", processId, portfolioAssets.size());
-       return portfolioAssets;
+        List<EquityModel> portfolioAssets = new ArrayList<>();
+        for (StockAsset stock : portfolios) {
+            log.debug("[ProcessId: {}] Processing stock: {}", processId, stock.getSymbol());
+            // Try to find NSE security by name or other identifiers
+            var assetModel = getAssetModel(stock, brokerType);
+            portfolioAssets.add(assetModel);
+        }
+        log.info("[ProcessId: {}] Successfully processed {} portfolio entries", processId, portfolioAssets.size());
+        return portfolioAssets;
     }
 
     @SuppressWarnings("rawtypes")
@@ -134,27 +157,30 @@ public class PortfolioServiceImpl implements PortfolioService {
                 .investmentValue(investedValue)
                 .name(stock.getName());
 
-        if(brokerType != null && (brokerType.isDhan() || brokerType.isMStock())){
-            Optional<SecurityModel> nseSecurity = findBestMatchBySearchParam(brokerType.isDhan() ? stock.getName() : stock.getSymbol());
+        if (brokerType != null
+                && (brokerType.isDhan() || brokerType.isMStock() || brokerType.isGrow() || brokerType.isAngelOne())) {
+            Optional<SecurityModel> nseSecurity = findBestMatchBySearchParam(
+                    (brokerType.isDhan() || brokerType.isGrow() || brokerType.isAngelOne()) ? stock.getName()
+                            : stock.getSymbol());
             if (nseSecurity.isPresent()) {
                 SecurityModel security = nseSecurity.get();
                 stock.setIsin(security.getKey().getIsin());
             }
         }
 
-        //if (stock.getIsin() == null || stock.getIsin().isEmpty()) {
-            Optional<SecurityModel> nseSecurity = securityService.findByKey(stock.getIsin());
-            // Enhance asset with NSE security information if available
-            if (nseSecurity.isPresent()) {
-                SecurityModel security = nseSecurity.get();
-                assetBuilder.isin(security.getKey().getIsin());
-                assetBuilder.symbol(security.getKey().getSymbol());
-                assetBuilder.name(security.getMetadata().getSecurityName());
-                assetBuilder.industry(security.getMetadata().getIndustry());
-                assetBuilder.sector(security.getMetadata().getSector());
-                assetBuilder.marketCap(security.getMetadata().getMarketCapType().getName());
-            }
-        //}
+        // if (stock.getIsin() == null || stock.getIsin().isEmpty()) {
+        Optional<SecurityModel> nseSecurity = securityService.findByKey(stock.getIsin());
+        // Enhance asset with NSE security information if available
+        if (nseSecurity.isPresent()) {
+            SecurityModel security = nseSecurity.get();
+            assetBuilder.isin(security.getKey().getIsin());
+            assetBuilder.symbol(security.getKey().getSymbol());
+            assetBuilder.name(security.getMetadata().getSecurityName());
+            assetBuilder.industry(security.getMetadata().getIndustry());
+            assetBuilder.sector(security.getMetadata().getSector());
+            assetBuilder.marketCap(security.getMetadata().getMarketCapType().getName());
+        }
+        // }
         return assetBuilder.build();
     }
 

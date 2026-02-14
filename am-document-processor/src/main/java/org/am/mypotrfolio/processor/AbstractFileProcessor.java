@@ -24,7 +24,9 @@ public abstract class AbstractFileProcessor implements FileProcessor {
             }
             if (brokerType.isZerodha()) {
                 log.debug("Using Zerodha parser");
-                return (documentRequest.getDocumentType() == DocumentType.TRADE_EQ || documentRequest.getDocumentType() == DocumentType.TRADE_FNO) ? parseZerodhaTradeFile(file) : parseZerodhaFile(file);
+                return (documentRequest.getDocumentType() == DocumentType.TRADE_EQ
+                        || documentRequest.getDocumentType() == DocumentType.TRADE_FNO) ? parseZerodhaTradeFile(file)
+                                : parseZerodhaFile(file);
             } else if (brokerType.isMStock()) {
                 log.debug("Using MStock parser");
                 return parseMStockFile(file);
@@ -34,6 +36,9 @@ public abstract class AbstractFileProcessor implements FileProcessor {
             } else if (brokerType.isGrow()) {
                 log.debug("Using Grow parser");
                 return parseGrowFile(file);
+            } else if (brokerType.isAngelOne()) {
+                log.debug("Using Angel One parser");
+                return parseAngelOneFile(file);
             }
             log.debug("Using default Dhan parser");
             return parseDhanFile(file);
@@ -44,10 +49,17 @@ public abstract class AbstractFileProcessor implements FileProcessor {
     }
 
     protected abstract List<Map<String, String>> parseZerodhaFile(MultipartFile file) throws Exception;
+
     protected abstract List<Map<String, String>> parseZerodhaTradeFile(MultipartFile file) throws Exception;
+
     protected abstract List<Map<String, String>> parseMStockFile(MultipartFile file) throws Exception;
+
     protected abstract List<Map<String, String>> parseDhanFile(MultipartFile file) throws Exception;
+
     protected abstract List<Map<String, String>> parseGrowFile(MultipartFile file) throws Exception;
+
+    protected abstract List<Map<String, String>> parseAngelOneFile(MultipartFile file) throws Exception;
+
     protected abstract List<Map<String, String>> parseNseSecurityFile(MultipartFile file) throws Exception;
 
     protected Map<String, String> createRowData(String[] headers, String[] values) {

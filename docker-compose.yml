@@ -41,11 +41,20 @@ services:
       context: ./am-email-extractor
       dockerfile: Dockerfile
     environment:
-      - MONGO_URI=${MONGODB_URL}
-      - MONGO_DB=${MONGODB_DATABASE}
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGO_DATABASE=${MONGODB_DATABASE}
+      - KAFKA_BOOTSTRAP_SERVERS=am_kafka:9092
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      # Set this if your Google Console redirect URI is different (e.g. port 8000)
+      - GMAIL_REDIRECT_URI=http://localhost:8080/api/v1/gmail/callback
+    volumes:
+      - ./am-email-extractor/user_tokens:/app/user_tokens
     ports:
-      - "8082:8080" # Extractor API
+      - "8080:8080" # Extractor API
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

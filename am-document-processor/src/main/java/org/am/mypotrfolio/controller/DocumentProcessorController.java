@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.am.mypotrfolio.domain.common.DocumentType;
+import com.am.common.amcommondata.model.enums.BrokerType;
 import org.am.mypotrfolio.model.DocumentProcessResponse;
 import org.am.mypotrfolio.model.ProcessingStatus;
 import org.am.mypotrfolio.service.DocumentProcessorService;
@@ -58,17 +59,10 @@ public class DocumentProcessorController {
      * Per coding instructions: "Public endpoints don't require authentication"
      * Spring Security: .permitAll()
      */
-    @Operation(
-        summary = "Get supported document types",
-        description = "Retrieve list of supported document types (public endpoint)"
-    )
+    @Operation(summary = "Get supported document types", description = "Retrieve list of supported document types (public endpoint)")
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Document types retrieved successfully",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class)))
-        ),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
+            @ApiResponse(responseCode = "200", description = "Document types retrieved successfully", content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class)))),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @GetMapping("/types")
     public ResponseEntity<List<String>> getSupportedDocumentTypes() {
@@ -93,53 +87,44 @@ public class DocumentProcessorController {
      * - This service trusts the headers (no manual validation needed)
      * - Spring Security: .authenticated() (ensures Authorization header exists)
      */
-    @Operation(
-        summary = "Process a single document",
-        description = "Upload and process a single portfolio document (internal service - via API Gateway only)",
-        security = @SecurityRequirement(name = "Bearer")
-    )
+    @Operation(summary = "Process a single document", description = "Upload and process a single portfolio document (internal service - via API Gateway only)", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Document processed successfully",
-            content = @Content(schema = @Schema(implementation = DocumentProcessResponse.class))
-        ),
-        @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
-        @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
+            @ApiResponse(responseCode = "200", description = "Document processed successfully", content = @Content(schema = @Schema(implementation = DocumentProcessResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
+            @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> processDocument(
-            @Parameter(description = "Portfolio document file to process", required = true)
-            @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Type of document being processed", required = true)
-            @RequestParam("documentType") DocumentType documentType,
-            @Parameter(description = "Portfolio ID (optional)", required = false)
-            @RequestParam(value = "portfolioId", required = false) String portfolioId,
-            @RequestHeader(value = "X-User-ID", required = true) String userId) {  // ← API Gateway provides this
-        
-        log.info("Processing document for user: {}, type: {}, portfolio: {}",
-            userId, documentType, portfolioId);
-        
+            @Parameter(description = "Portfolio document file to process", required = true) @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Type of document being processed", required = true) @RequestParam("documentType") DocumentType documentType,
+            @Parameter(description = "Portfolio ID (optional)", required = false) @RequestParam(value = "portfolioId", required = false) String portfolioId,
+            @Parameter(description = "Explicit Broker Type (optional)", required = false) @RequestParam(value = "brokerType", required = false) BrokerType brokerType,
+            @RequestHeader(value = "X-User-ID", required = true) String userId) { // ← API Gateway provides this
+
+        log.info("Processing document for user: {}, type: {}, portfolio: {}, broker: {}",
+                userId, documentType, portfolioId, brokerType);
+
         try {
             // ✅ Just call service with user_id from header (API Gateway already validated)
             DocumentProcessResponse response = documentProcessorService.processDocument(
-                file,
-                documentType,
-                portfolioId,
-                userId  // ← Directly from API Gateway header
+                    file,
+                    documentType,
+                    portfolioId,
+                    brokerType, // Pass explicit broker type
+                    userId // ← Directly from API Gateway header
             );
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (IllegalArgumentException e) {
             log.warn("Invalid document parameters: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                .body(new ErrorResponse("Invalid parameters: " + e.getMessage()));
+                    .body(new ErrorResponse("Invalid parameters: " + e.getMessage()));
         } catch (Exception e) {
             log.error("Error processing document for user: {}", userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("Failed to process document"));
+                    .body(new ErrorResponse("Failed to process document"));
         }
     }
 
@@ -148,53 +133,42 @@ public class DocumentProcessorController {
      * 
      * Per coding instructions: Same flow as single document
      */
-    @Operation(
-        summary = "Process multiple documents",
-        description = "Upload and process multiple portfolio documents (internal service - via API Gateway only)",
-        security = @SecurityRequirement(name = "Bearer")
-    )
+    @Operation(summary = "Process multiple documents", description = "Upload and process multiple portfolio documents (internal service - via API Gateway only)", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Documents processed successfully",
-            content = @Content(array = @ArraySchema(schema = @Schema(implementation = DocumentProcessResponse.class)))
-        ),
-        @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
-        @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
+            @ApiResponse(responseCode = "200", description = "Documents processed successfully", content = @Content(array = @ArraySchema(schema = @Schema(implementation = DocumentProcessResponse.class)))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
+            @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping(value = "/batch-process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> processBatchDocuments(
-            @Parameter(description = "List of portfolio document files to process", required = true)
-            @RequestParam("files") List<MultipartFile> files,
-            @Parameter(description = "Type of documents being processed", required = true)
-            @RequestParam("documentType") DocumentType documentType,
-            @Parameter(description = "Portfolio ID (optional)", required = false)
-            @RequestParam(value = "portfolioId", required = false) String portfolioId,
+            @Parameter(description = "List of portfolio document files to process", required = true) @RequestParam("files") List<MultipartFile> files,
+            @Parameter(description = "Type of documents being processed", required = true) @RequestParam("documentType") DocumentType documentType,
+            @Parameter(description = "Portfolio ID (optional)", required = false) @RequestParam(value = "portfolioId", required = false) String portfolioId,
             @RequestHeader(value = "X-User-ID", required = true) String userId) {
-        
+
         log.info("Batch processing {} documents for user: {}, type: {}",
-            files.size(), userId, documentType);
-        
+                files.size(), userId, documentType);
+
         try {
             // ✅ Just call service with user_id from header
             List<DocumentProcessResponse> responses = documentProcessorService.processBatchDocuments(
-                files,
-                documentType,
-                portfolioId,
-                userId  // ← Directly from API Gateway header
+                    files,
+                    documentType,
+                    portfolioId,
+                    userId // ← Directly from API Gateway header
             );
-            
+
             return ResponseEntity.ok(responses);
-            
+
         } catch (IllegalArgumentException e) {
             log.warn("Invalid batch parameters: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                .body(new ErrorResponse("Invalid parameters: " + e.getMessage()));
+                    .body(new ErrorResponse("Invalid parameters: " + e.getMessage()));
         } catch (Exception e) {
             log.error("Error batch processing documents for user: {}", userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("Failed to process documents"));
+                    .body(new ErrorResponse("Failed to process documents"));
         }
     }
 
@@ -203,38 +177,29 @@ public class DocumentProcessorController {
      * 
      * Per coding instructions: Protected endpoint requires X-User-ID header
      */
-    @Operation(
-        summary = "Get document processing status",
-        description = "Retrieve the current status of a document processing request (internal service - via API Gateway only)",
-        security = @SecurityRequirement(name = "Bearer")
-    )
+    @Operation(summary = "Get document processing status", description = "Retrieve the current status of a document processing request (internal service - via API Gateway only)", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Processing status retrieved successfully",
-            content = @Content(schema = @Schema(implementation = ProcessingStatus.class))
-        ),
-        @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
-        @ApiResponse(responseCode = "404", description = "Process ID not found"),
-        @ApiResponse(responseCode = "500", description = "Internal server error")
+            @ApiResponse(responseCode = "200", description = "Processing status retrieved successfully", content = @Content(schema = @Schema(implementation = ProcessingStatus.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized: Missing authentication"),
+            @ApiResponse(responseCode = "404", description = "Process ID not found"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @GetMapping("/status/{processId}")
     public ResponseEntity<?> getProcessingStatus(
-            @Parameter(description = "Unique identifier of the processing request", required = true)
-            @PathVariable UUID processId,
+            @Parameter(description = "Unique identifier of the processing request", required = true) @PathVariable UUID processId,
             @RequestHeader(value = "X-User-ID", required = true) String userId) {
-        
+
         log.info("Getting processing status for process: {}, user: {}", processId, userId);
-        
+
         try {
             // ✅ Get status (already scoped to authenticated user via X-User-ID)
             ProcessingStatus status = documentProcessorService.getProcessingStatus(processId);
             return ResponseEntity.ok(status);
-            
+
         } catch (Exception e) {
             log.error("Error getting processing status for processId: {}", processId, e);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse("Process not found"));
+                    .body(new ErrorResponse("Process not found"));
         }
     }
 
